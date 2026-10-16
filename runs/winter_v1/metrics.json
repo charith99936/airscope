@@ -1,0 +1,290 @@
+{
+  "summary": {
+    "rows": 182232,
+    "stations": 505,
+    "spatial_blocks": 158,
+    "folds": 5,
+    "block_deg": 1.0,
+    "period_utc": [
+      "2025-10-01 06:00:00",
+      "2026-01-31 09:00:00"
+    ],
+    "share_rows_with_aod": 0.6940438561833268,
+    "pm25_median": 47.0,
+    "temporal_cutoff_utc": "2025-12-31 07:00:00"
+  },
+  "spatial_cv": [
+    {
+      "subset": "INSAT AOD available",
+      "model": "CAMS PM2.5 as-is (no training)",
+      "n": 126477,
+      "r2": 0.15947594217039163,
+      "rmse": 51.072020586811675,
+      "mae": 31.263959823288026,
+      "bias": -14.864356313242721,
+      "pearson_r": 0.480338977237902
+    },
+    {
+      "subset": "INSAT AOD available",
+      "model": "Linear fit: PM2.5 ~ INSAT AOD",
+      "n": 126477,
+      "r2": -0.11618408281442894,
+      "rmse": 58.853985599730876,
+      "mae": 38.07672568848905,
+      "bias": -0.4793518353403769,
+      "pearson_r": -0.23702239686118223
+    },
+    {
+      "subset": "INSAT AOD available",
+      "model": "LightGBM: weather + CAMS, no satellite",
+      "n": 126477,
+      "r2": 0.1995681259490587,
+      "rmse": 49.83909565587802,
+      "mae": 28.518887415249033,
+      "bias": -14.609595634502597,
+      "pearson_r": 0.5417838571418457
+    },
+    {
+      "subset": "INSAT AOD available",
+      "model": "LightGBM: weather + CAMS + INSAT AOD",
+      "n": 126477,
+      "r2": 0.217635230430973,
+      "rmse": 49.27340886516557,
+      "mae": 28.14196290938005,
+      "bias": -14.500092070383863,
+      "pearson_r": 0.560003748917912
+    },
+    {
+      "subset": "AOD missing (cloud / bright surface)",
+      "model": "CAMS PM2.5 as-is (no training)",
+      "n": 55755,
+      "r2": 0.2154410280658543,
+      "rmse": 43.03623776628182,
+      "mae": 25.787831154694647,
+      "bias": -10.536135485068606,
+      "pearson_r": 0.527273885086421
+    },
+    {
+      "subset": "AOD missing (cloud / bright surface)",
+      "model": "LightGBM: weather + CAMS, no satellite",
+      "n": 55755,
+      "r2": 0.28302125366742426,
+      "rmse": 41.14098094533449,
+      "mae": 22.388335077735565,
+      "bias": -9.4108751204977,
+      "pearson_r": 0.5668727659834144
+    },
+    {
+      "subset": "AOD missing (cloud / bright surface)",
+      "model": "LightGBM: weather + CAMS + INSAT AOD",
+      "n": 55755,
+      "r2": 0.2936726453858909,
+      "rmse": 40.83424353592767,
+      "mae": 22.054562190083328,
+      "bias": -9.864822134004083,
+      "pearson_r": 0.5845466400803285
+    },
+    {
+      "subset": "all scan hours",
+      "model": "CAMS PM2.5 as-is (no training)",
+      "n": 182232,
+      "r2": 0.18652593296408282,
+      "rmse": 48.75425102961036,
+      "mae": 29.588504612801266,
+      "bias": -13.540110559067559,
+      "pearson_r": 0.5005721058283291
+    },
+    {
+      "subset": "all scan hours",
+      "model": "LightGBM: weather + CAMS, no satellite",
+      "n": 182232,
+      "r2": 0.23278232496385365,
+      "rmse": 47.34781397235408,
+      "mae": 26.643207262597123,
+      "bias": -13.019015153257026,
+      "pearson_r": 0.5526273620551823
+    },
+    {
+      "subset": "all scan hours",
+      "model": "LightGBM: weather + CAMS + INSAT AOD",
+      "n": 182232,
+      "r2": 0.24873229656030038,
+      "rmse": 46.85306348394279,
+      "mae": 26.279485259437184,
+      "bias": -13.08190275509975,
+      "pearson_r": 0.5730812417262235
+    }
+  ],
+  "temporal_holdout": [
+    {
+      "subset": "INSAT AOD available",
+      "model": "CAMS PM2.5 as-is (no training)",
+      "n": 26727,
+      "r2": 0.08609160384497172,
+      "rmse": 41.27093519216549,
+      "mae": 27.78519426684626,
+      "bias": -4.652170944363378,
+      "pearson_r": 0.3863052701247725
+    },
+    {
+      "subset": "INSAT AOD available",
+      "model": "Linear fit: PM2.5 ~ INSAT AOD",
+      "n": 26727,
+      "r2": -0.030603462396518566,
+      "rmse": 43.82670040250978,
+      "mae": 31.186273711862928,
+      "bias": 7.765620195710426,
+      "pearson_r": 0.11165456826913617
+    },
+    {
+      "subset": "INSAT AOD available",
+      "model": "LightGBM: weather + CAMS, no satellite",
+      "n": 26727,
+      "r2": 0.13029211261928753,
+      "rmse": 40.26054789198991,
+      "mae": 24.742727730951845,
+      "bias": -7.751181285309618,
+      "pearson_r": 0.40468371148290155
+    },
+    {
+      "subset": "INSAT AOD available",
+      "model": "LightGBM: weather + CAMS + INSAT AOD",
+      "n": 26727,
+      "r2": 0.15914718004166284,
+      "rmse": 39.58703443828231,
+      "mae": 24.36747193911204,
+      "bias": -6.472057909117118,
+      "pearson_r": 0.42858211708650407
+    },
+    {
+      "subset": "AOD missing (cloud / bright surface)",
+      "model": "CAMS PM2.5 as-is (no training)",
+      "n": 9928,
+      "r2": 0.03970593398717448,
+      "rmse": 50.24381606952585,
+      "mae": 34.89945699033038,
+      "bias": -9.522194903303786,
+      "pearson_r": 0.3422541344838108
+    },
+    {
+      "subset": "AOD missing (cloud / bright surface)",
+      "model": "LightGBM: weather + CAMS, no satellite",
+      "n": 9928,
+      "r2": -0.03365541263411287,
+      "rmse": 52.1276787328403,
+      "mae": 33.42625092800589,
+      "bias": -17.574454143566786,
+      "pearson_r": 0.29677838040786836
+    },
+    {
+      "subset": "AOD missing (cloud / bright surface)",
+      "model": "LightGBM: weather + CAMS + INSAT AOD",
+      "n": 9928,
+      "r2": -0.02689522141042633,
+      "rmse": 51.956939464360694,
+      "mae": 32.733015653981255,
+      "bias": -18.70287416923492,
+      "pearson_r": 0.3258348759695442
+    },
+    {
+      "subset": "all scan hours",
+      "model": "CAMS PM2.5 as-is (no training)",
+      "n": 36655,
+      "r2": 0.07996340748082265,
+      "rmse": 43.882783393589456,
+      "mae": 29.712091015414,
+      "bias": -5.971216036829901,
+      "pearson_r": 0.37778141685814765
+    },
+    {
+      "subset": "all scan hours",
+      "model": "LightGBM: weather + CAMS, no satellite",
+      "n": 36655,
+      "r2": 0.08370517940563416,
+      "rmse": 43.79345724203846,
+      "mae": 27.094658389807464,
+      "bias": -10.411812930017765,
+      "pearson_r": 0.3705015794462483
+    },
+    {
+      "subset": "all scan hours",
+      "model": "LightGBM: weather + CAMS + INSAT AOD",
+      "n": 36655,
+      "r2": 0.1047393351120286,
+      "rmse": 43.28788502330856,
+      "mae": 26.63327791377366,
+      "bias": -9.7847722408713,
+      "pearson_r": 0.389721639521169
+    }
+  ],
+  "aod_diagnostics": [
+    {
+      "proxy": "AOD (raw INSAT)",
+      "n": 126477,
+      "log_log_r": 0.16734336723981982
+    },
+    {
+      "proxy": "AOD / BLH",
+      "n": 126477,
+      "log_log_r": 0.24303930048423666
+    },
+    {
+      "proxy": "AOD / (BLH x f(RH)), gamma=0.0",
+      "n": 126477,
+      "log_log_r": 0.24303930048423666
+    },
+    {
+      "proxy": "AOD / (BLH x f(RH)), gamma=0.25",
+      "n": 126477,
+      "log_log_r": 0.2495605621538513
+    },
+    {
+      "proxy": "AOD / (BLH x f(RH)), gamma=0.5",
+      "n": 126477,
+      "log_log_r": 0.2548626089097678
+    },
+    {
+      "proxy": "AOD / (BLH x f(RH)), gamma=0.75",
+      "n": 126477,
+      "log_log_r": 0.25843198485803787
+    },
+    {
+      "proxy": "AOD / (BLH x f(RH)), gamma=1.0",
+      "n": 126477,
+      "log_log_r": 0.2597680865868203
+    },
+    {
+      "proxy": "CAMS PM2.5 (model, for reference)",
+      "n": 126477,
+      "log_log_r": 0.4612561138665479
+    }
+  ],
+  "shap_importance": {
+    "cams_pm25": 0.21260087460405516,
+    "surface_pressure": 0.0944034140510915,
+    "cams_pm10": 0.07268082941766825,
+    "doy_sin": 0.0554386566977729,
+    "precip_24h": 0.04432687612868265,
+    "hour_ist": 0.027824635789728772,
+    "dew_point_2m": 0.02764669453722328,
+    "blh_min_12h": 0.024783707557995846,
+    "temperature_2m": 0.024084117189681852,
+    "v10": 0.022778986025756873,
+    "u10": 0.021007319379632846,
+    "aod_corr": 0.020348045469309618,
+    "relative_humidity_2m": 0.01623673715994927,
+    "cams_dust": 0.015547473054560102,
+    "cloud_cover": 0.014443173255955353,
+    "boundary_layer_height": 0.014034201641362614,
+    "doy_cos": 0.013205913918521644,
+    "wind_speed_10m": 0.010983335123240083,
+    "cams_aod": 0.010282404370633897,
+    "aod_nearest": 0.010280758877034587,
+    "wind_mean_6h": 0.009135865649497244,
+    "aod_over_blh": 0.008308365641730132,
+    "aod": 0.008121805822462285,
+    "aod_minus_cams": 0.006751470964718364,
+    "aod_std": 0.0065829234957031635,
+    "aod_frac_valid": 0.005404936526960465
+  }
+}

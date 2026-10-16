@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>INSAT PM2.5 Map</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="/static/classic/style.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <h1>INSAT PM2.5</h1>
+      <p>Surface PM2.5 inferred from ISRO satellite AOD + weather</p>
+    </div>
+    <div class="controls">
+      <label class="field">
+        <span>Hour (IST)</span>
+        <select id="hour"></select>
+      </label>
+      <div class="segmented" id="layers" role="radiogroup" aria-label="Map layer"></div>
+      <label class="check"><input type="checkbox" id="onlyAod"> Only where the satellite saw the ground</label>
+      <label class="check"><input type="checkbox" id="showStations" checked> Ground stations</label>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden>
+    <span class="banner-icon" aria-hidden="true">!</span>
+    <span id="bannerText"></span>
+  </div>
+
+  <main class="stage">
+    <div id="map" aria-label="Map of India"></div>
+
+    <section class="legend card" aria-live="polite">
+      <div class="legend-title" id="legendTitle"></div>
+      <div class="legend-bar" id="legendBar"></div>
+      <div class="legend-ticks" id="legendTicks"></div>
+      <div class="legend-bands" id="legendBands"></div>
+      <div class="legend-foot" id="legendFoot"></div>
+    </section>
+
+    <aside id="inspector" class="inspector card" hidden aria-label="Location details">
+      <button class="close" id="closeInspector" aria-label="Close">×</button>
+      <div id="inspectorBody"></div>
+    </aside>
+
+    <p class="hint card" id="hint">Click anywhere in India to see the predicted PM2.5 and why.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="/static/classic/app.js"></script>
+</body>
+</html>

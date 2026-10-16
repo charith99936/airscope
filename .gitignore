@@ -1,0 +1,28 @@
+# secrets: never commit
+openaq_key.txt
+openaq_key.txt.rtf
+*.key
+.env
+tools/mosdac/config.json
+
+# data and model outputs (large; rebuilt by the pipeline)
+data/
+maps/
+runs/*/
+!runs/winter_v1/
+runs/winter_v1/*
+!runs/winter_v1/report.md
+!runs/winter_v1/metrics.json
+!runs/winter_v1/*.png
+*.log
+
+# environments and builds
+.venv/
+__pycache__/
+*.pyc
+web/node_modules/
+web/dist/
+web/public/maplibre/
+.DS_Store
+.claude/
+tools/

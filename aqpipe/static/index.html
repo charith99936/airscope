@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>INSAT PM2.5</title>
+  <meta name="description" content="Street-level PM2.5 across India, inferred from ISRO INSAT satellite aerosol data and weather.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/vendor/maplibre-gl-4.7.1.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></symbol>
+    <symbol id="i-region" viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol>
+  </svg>
+
+  <a class="skip-link" href="#layers">Skip to map controls</a>
+  <div id="live" class="sr-only" aria-live="polite"></div>
+  <div id="progress" class="progress" hidden></div>
+
+  <div id="map" class="map" role="application" aria-label="Map of India. Click anywhere to see the PM2.5 estimate there."></div>
+
+  <!-- Headline -->
+  <header class="corner-left">
+    <div class="brand">
+      <span class="wordmark">INSAT <span>PM2.5</span></span>
+      <span id="demoTag" class="tag" hidden title="Satellite AOD and station PM2.5 are simulated in this demo; weather and CAMS are real."><span class="tag-long">Synthetic </span>demo</span>
+    </div>
+    <section class="hero" aria-live="polite" aria-label="This hour across India">
+      <p class="hero-num"><span id="heroValue" class="num">—</span><span class="unit">µg/m³</span></p>
+      <p class="hero-label">Median PM2.5 over India · <span id="heroCat">—</span></p>
+      <p class="hero-time" id="heroTime">Loading…</p>
+      <div class="dist" id="distBar" role="img"></div>
+      <p class="hero-meta" id="heroMeta"></p>
+    </section>
+  </header>
+
+  <nav class="corner-right" aria-label="Tools">
+    <button id="searchBtn" class="ghost" type="button" aria-label="Search a city or station" aria-keyshortcuts="/"><svg class="ico"><use href="#i-search"/></svg></button>
+    <button id="themeBtn" class="ghost" type="button" aria-label="Switch to light theme" aria-keyshortcuts="t"><svg class="ico"><use href="#i-sun"/></svg></button>
+    <button id="infoBtn" class="ghost" type="button" aria-label="About this map" aria-keyshortcuts="?" aria-haspopup="dialog"><svg class="ico"><use href="#i-info"/></svg></button>
+  </nav>
+
+  <!-- Bottom dock: caption, layers, time, legend -->
+  <footer class="dock-wrap">
+    <p class="caption" id="caption" aria-live="polite"></p>
+    <div class="dock glass">
+      <div id="layers" class="seg" role="radiogroup" aria-label="Map layer"></div>
+      <span class="divider" aria-hidden="true"></span>
+      <div class="time" role="group" aria-label="Hour">
+        <button id="prevHour" class="ghost sm" type="button" aria-label="Previous hour"><svg class="ico"><use href="#i-prev"/></svg></button>
+        <button id="playBtn" class="ghost sm play" type="button" aria-label="Play through hours" aria-pressed="false"><svg class="ico fill"><use href="#i-play"/></svg></button>
+        <button id="nextHour" class="ghost sm" type="button" aria-label="Next hour"><svg class="ico"><use href="#i-next"/></svg></button>
+        <input id="timeSlider" type="range" min="0" max="0" step="1" value="0" aria-label="Hour">
+        <span id="timeLabel" class="time-label">—</span>
+      </div>
+      <span class="divider" aria-hidden="true"></span>
+      <button id="viewToggle" class="ghost sm" type="button" aria-pressed="true" aria-label="3D columns" title="3D columns (D)"><svg class="ico"><use href="#i-cube"/></svg></button>
+    </div>
+    <div class="legend" aria-label="Legend">
+      <span class="legend-title" id="legendTitle"></span>
+      <div class="legend-scale">
+        <div class="legend-bar" id="legendBar"></div>
+        <span class="legend-marker" id="legendMarker" aria-hidden="true" hidden></span>
+      </div>
+      <div class="legend-ticks" id="legendTicks"></div>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast glass" role="alert" hidden><svg class="ico"><use href="#i-alert"/></svg><span id="toastText"></span></div>
+
+  <!-- Location sheet -->
+  <aside id="sheet" class="sheet glass" aria-label="Location details" hidden>
+    <button id="closeSheet" class="ghost sm close" type="button" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+    <div id="sheetBody"></div>
+  </aside>
+
+  <!-- Search palette -->
+  <dialog id="palette" class="palette glass" aria-label="Search places">
+    <div class="palette-input">
+      <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="searchInput" type="text" role="combobox" aria-label="Search a city or station" aria-expanded="true"
+             aria-controls="searchList" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Search a city or station">
+      <kbd>esc</kbd>
+    </div>
+    <ul id="searchList" class="results" role="listbox" aria-label="Places"></ul>
+  </dialog>
+
+  <!-- About -->
+  <dialog id="infoDialog" class="modal glass" aria-labelledby="infoTitle">
+    <button class="ghost sm close" type="button" id="closeInfo" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+    <h2 id="infoTitle">From space to street</h2>
+    <p class="lead">India has about 500 ground monitors, mostly in big cities. ISRO's INSAT-3DR sees the whole country
+      every half hour. This map turns what the satellite sees into the PM2.5 you breathe.</p>
+    <ol class="steps-list">
+      <li><b>Satellite</b> — aerosol optical depth: how much sunlight the whole air column blocks. Gaps are clouds or bright desert.</li>
+      <li><b>Corrected</b> — the same haze divided by mixing height and humidity swelling: a low ceiling traps it near the ground.</li>
+      <li><b>PM2.5</b> — a model trained on CPCB stations turns satellite + weather into µg/m³, coloured by India's AQI bands.</li>
+      <li><b>CAMS</b> — the European forecast, with no INSAT input, on the same scale.</li>
+      <li><b>Δ INSAT</b> — the model with the satellite minus without it. Red: the satellite says the air is dirtier.</li>
+    </ol>
+    <div class="info-grid">
+      <section>
+        <h3>Model check</h3>
+        <p id="skillText" class="small">Measured at stations in whole areas held out of training.</p>
+        <button id="openTable" class="text-btn" type="button">See every station this hour →</button>
+      </section>
+      <section>
+        <h3>Shortcuts</h3>
+        <dl class="keys">
+          <dt><kbd>/</kbd></dt><dd>Search</dd><dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Hour</dd>
+          <dt><kbd>space</kbd></dt><dd>Play</dd><dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Layer</dd>
+          <dt><kbd>D</kbd></dt><dd>3D</dd><dt><kbd>T</kbd></dt><dd>Theme</dd>
+        </dl>
+      </section>
+    </div>
+    <p class="fine">Data: INSAT-3DR L2G AOD (ISRO MOSDAC) · CPCB stations via OpenAQ · ERA5 and CAMS via Open-Meteo ·
+      land outline: Natural Earth. AQI categories use 24-hour averages; these are one-hour estimates. Values far
+      from any station are flagged as low confidence. <span id="demoNote"></span></p>
+  </dialog>
+
+  <dialog id="tableDialog" class="modal glass wide" aria-labelledby="tableTitle">
+    <button class="ghost sm close" type="button" id="closeTable" aria-label="Close"><svg class="ico"><use href="#i-x"/></svg></button>
+    <h2 id="tableTitle">Stations</h2>
+    <p class="small muted">Observed PM2.5 next to the model's value for that spot, biggest misses first.</p>
+    <div class="table-wrap"><table id="stationTable"><thead><tr>
+      <th scope="col">Station</th><th scope="col" class="num">Observed</th><th scope="col" class="num">Model</th><th scope="col" class="num">Miss</th>
+    </tr></thead><tbody></tbody></table></div>
+  </dialog>
+
+  <script src="/static/vendor/h3-js-4.1.0.umd.js"></script>
+  <script src="/static/vendor/maplibre-gl-4.7.1.min.js"></script>
+  <script src="/static/vendor/deck.gl-9.0.38.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
