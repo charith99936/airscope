@@ -14,17 +14,19 @@ Open-Meteo ERA5 (BLH, RH, wind, T, rain) + CAMS (PM2.5, AOD) ──────�
 ## Results: INSAT-3DR, Oct 2025 – Jan 2026
 
 855 L2G AOD scans, 182,232 station-hours from 505 CPCB stations (via OpenAQ), ERA5 weather and CAMS.
-Spatial-block CV (whole 1° blocks held out), all scan hours:
+All scores are on stations the model never trained on, over all scan hours.
 
-| model | R² | RMSE (µg/m³) | MAE |
-|---|---|---|---|
-| CAMS PM2.5 as-is | 0.187 | 48.8 | 29.6 |
-| LightGBM, weather + CAMS, no satellite | 0.233 | 47.3 | 26.6 |
-| LightGBM, weather + CAMS + INSAT AOD | **0.249** | **46.9** | **26.3** |
+| model | spatial CV R² | RMSE (µg/m³) | January hold-out R² | RMSE |
+|---|---|---|---|---|
+| CAMS PM2.5 as-is | 0.187 | 48.8 | 0.080 | 43.9 |
+| v1: weather + CAMS + INSAT AOD | 0.249 | 46.9 | 0.105 | 43.3 |
+| v2: weather + CAMS, no satellite | 0.300 | 45.2 | −0.019 | 46.2 |
+| **v2: + INSAT AOD + satellite context** | **0.380** | **42.6** | **0.404** | **35.3** |
 
-The satellite helps, but modestly. Raw AOD alone tracks PM2.5 poorly (log–log r = 0.17); dividing by the
-boundary-layer height and humidity growth lifts it to 0.26. The biggest remaining error is Delhi-area
-stations, under-predicted by about 100 µg/m³ in winter. Full report: [`runs/winter_v1/report.md`](runs/winter_v1/report.md).
+Spatial CV holds out whole 1° blocks (about 100 km); the hold-out trains on Oct–Dec and tests on January.
+v2 adds satellite context features (50 km, daily and seasonal AOD), two monotone physics constraints and
+larger trees; each change was tested on its own (`runs/ablation.json`). The seasonal AOD climatology became
+the second strongest driver after CAMS. Full report: [`runs/winter_v2/report.md`](runs/winter_v2/report.md).
 
 ## What the MOSDAC AOD product actually is
 
@@ -99,14 +101,20 @@ average window that contains it, allowing ~9 min for the full-disk scan to reach
 Weather and CAMS are fetched once per model grid cell (ERA5 0.25°, CAMS 0.4°) instead of once per station.
 That roughly halves the Open-Meteo calls; the free tier allows 10,000 weighted calls a day.
 
-**3. Match, build, train.**
+**3. Match, build, add satellite context, train.**
 
 ```bash
 .venv/bin/python -m aqpipe match --aod-dir data/mosdac --satellite 3R
 .venv/bin/python -m aqpipe build          # QC + ERA5 + CAMS from Open-Meteo, cached
-.venv/bin/python -m aqpipe train --out runs/winter_v1
-.venv/bin/python -m aqpipe train --out runs/winter_v1_latlon --latlon   # ablation
+.venv/bin/python -m aqpipe context --aod-dir data/mosdac --satellite 3R   # 50 km, daily and seasonal AOD
+.venv/bin/python -m aqpipe train --table data/train_table_context.csv --out runs/winter_v2
+.venv/bin/python -m aqpipe train --out runs/winter_v1   # v1: no context features, for comparison
 ```
+
+`context` adds four features computed only from the AOD files, the same way at a station and at a map cell:
+mean AOD within 50 km (`aod_50km`), the location's mean over that day's scans (`aod_day`), its seasonal mean
+over every scan (`aod_clim`), and today relative to usual (`aod_anom`). Training also applies two physics
+guardrails as monotone constraints: PM2.5 can only rise with CAMS PM2.5 and only fall as the mixing layer deepens.
 
 `runs/<name>/report.md` holds the results, alongside `oof_scatter.png`, `model_comparison.png` and `shap_importance.png`.
 
@@ -117,9 +125,9 @@ only as an ablation.
 **4. All-India maps and the web app.**
 
 ```bash
-.venv/bin/python -m aqpipe predict --aod-dir data/mosdac --model runs/winter_v1 --out maps \
-    --hours 2025-12-10T06,2025-12-10T07,2025-12-10T08
-.venv/bin/python -m aqpipe serve --maps maps --model runs/winter_v1 \
+.venv/bin/python -m aqpipe predict --aod-dir data/mosdac --model runs/winter_v2 --out maps/winter_v2 \
+    --satellite 3R --hours 2025-12-10T06,2025-12-10T08
+.venv/bin/python -m aqpipe serve --maps maps/winter_v2 --model runs/winter_v2 \
     --stations data/stations.csv --truth data/pm25_truth.csv
 ```
 
@@ -222,6 +230,7 @@ PM2.5 at 40 city coordinates. The weather and CAMS it uses are real. Use it to c
 | `aqpipe/openmeteo.py` | ERA5 weather and CAMS at station points, cached |
 | `aqpipe/match.py` | Haversine BallTree window sampling, scans → UTC hours |
 | `aqpipe/features.py` | Joins and physics features (AOD/BLH, humidity-corrected AOD, AOD − CAMS) |
+| `aqpipe/context.py` | Satellite context: 50 km AOD, daily AOD, seasonal AOD climatology and anomaly |
 | `aqpipe/train.py` | CV, baselines, out-of-fold SHAP, plots, report, final model |
 | `aqpipe/predict.py` | All-India grid prediction per scan hour (`.npz` maps) |
 | `aqpipe/landmask.py` | Land/sea mask from Natural Earth |

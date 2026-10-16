@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 
+from .context import CONTEXT_FEATURES, WIDE_RADIUS_KM, climatology
 from .features import CAMS_RENAME, add_physics, add_time_features
 from .landmask import india_mask, land_mask
 from .match import StationMatcher, scan_hour, to_hourly
@@ -79,6 +80,7 @@ def predict_maps(
     spec = json.loads((model_dir / "features.json").read_text())
     sets, prep = spec["feature_sets"], spec.get("preprocessing", {})
     models = {k: lgb.Booster(model_file=str(model_dir / f"{k}.txt")) for k in sets}
+    context = any(c in sets["lgbm_with_insat_aod"] for c in CONTEXT_FEATURES)
 
     files = list_aod_files(aod_dir)
     if satellite:
@@ -97,6 +99,22 @@ def predict_maps(
     LON, LAT = np.meshgrid(lon_ax, lat_ax)
     cells = pd.DataFrame({"station_id": np.arange(LAT.size), "lat": LAT.ravel(), "lon": LON.ravel()})
     matcher = StationMatcher(cells, radius_km=float(prep.get("radius_km", 15.0)))
+    if context:  # the same satellite context the training stations got
+        wide = StationMatcher(cells, radius_km=WIDE_RADIUS_KM)
+        clim = matcher.sample(climatology(files, bbox, cache_dir)).set_index("station_id")["aod_mean"].reindex(cells["station_id"])
+        day_cache: dict = {}
+
+    def hourly_aod(h, m=matcher):
+        samples = pd.concat([m.sample(read_aod(f, bbox=bbox)) for f in by_hour[h]], ignore_index=True)
+        return to_hourly(samples).set_index("station_id").reindex(cells["station_id"])
+
+    def day_mean(h):  # mean hourly AOD over every scan hour of that UTC day, per cell
+        d = h.floor("D")
+        if d not in day_cache:
+            hs = [x for x in by_hour if x.floor("D") == d]
+            day_cache.clear()
+            day_cache[d] = np.nanmean(np.vstack([hourly_aod(x)["aod"].to_numpy() for x in hs]), axis=0)
+        return day_cache[d]
 
     start = (min(wanted) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     end = max(wanted).strftime("%Y-%m-%d")
@@ -106,8 +124,7 @@ def predict_maps(
 
     written = []
     for hour in wanted:
-        samples = pd.concat([matcher.sample(read_aod(f, bbox=bbox)) for f in by_hour[hour]], ignore_index=True)
-        aod = to_hourly(samples).set_index("station_id").reindex(cells["station_id"])
+        aod = hourly_aod(hour)
         df = pd.concat(
             [cells.reset_index(drop=True),
              aod[["aod", "aod_nearest", "aod_std", "aod_frac_valid"]].reset_index(drop=True),
@@ -115,6 +132,11 @@ def predict_maps(
             axis=1,
         )
         df["time_utc"] = hour
+        if context:
+            df["aod_50km"] = hourly_aod(hour, wide)["aod"].to_numpy()
+            df["aod_clim"] = clim.to_numpy()
+            df["aod_day"] = day_mean(hour)
+            df["aod_anom"] = df["aod_day"] / df["aod_clim"].where(df["aod_clim"] > 0.02)
         df = add_time_features(add_physics(df, float(prep.get("gamma", 0.5))))
         full = sets["lgbm_with_insat_aod"]
         X = df[full].to_numpy(dtype=np.float32)

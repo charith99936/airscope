@@ -1,0 +1,78 @@
+{
+  "feature_sets": {
+    "lgbm_no_satellite": [
+      "boundary_layer_height",
+      "blh_min_12h",
+      "relative_humidity_2m",
+      "temperature_2m",
+      "dew_point_2m",
+      "surface_pressure",
+      "cloud_cover",
+      "u10",
+      "v10",
+      "wind_speed_10m",
+      "wind_mean_6h",
+      "precip_24h",
+      "cams_pm25",
+      "cams_pm10",
+      "cams_aod",
+      "cams_dust",
+      "doy_sin",
+      "doy_cos",
+      "hour_ist"
+    ],
+    "lgbm_with_insat_aod": [
+      "aod",
+      "aod_nearest",
+      "aod_std",
+      "aod_frac_valid",
+      "aod_over_blh",
+      "aod_corr",
+      "aod_minus_cams",
+      "aod_50km",
+      "aod_day",
+      "aod_clim",
+      "aod_anom",
+      "boundary_layer_height",
+      "blh_min_12h",
+      "relative_humidity_2m",
+      "temperature_2m",
+      "dew_point_2m",
+      "surface_pressure",
+      "cloud_cover",
+      "u10",
+      "v10",
+      "wind_speed_10m",
+      "wind_mean_6h",
+      "precip_24h",
+      "cams_pm25",
+      "cams_pm10",
+      "cams_aod",
+      "cams_dust",
+      "doy_sin",
+      "doy_cos",
+      "hour_ist"
+    ]
+  },
+  "lgb_params": {
+    "n_estimators": 900,
+    "learning_rate": 0.03,
+    "num_leaves": 127,
+    "min_child_samples": 80,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 1.0,
+    "verbose": -1
+  },
+  "monotone": {
+    "boundary_layer_height": -1,
+    "blh_min_12h": -1,
+    "cams_pm25": 1
+  },
+  "preprocessing": {
+    "radius_km": 15.0,
+    "gamma": 0.5,
+    "satellite": "3R"
+  }
+}

@@ -89,7 +89,14 @@ export default function Timeline({ step, onStep, hours, index, onIndex, playing,
       <div className="tl-mid">
         <motion.button className="play" type="button" aria-label={playing ? "Pause" : "Play through hours"} aria-pressed={playing}
           onClick={onPlay} whileTap={{ scale: 0.9 }}><Icon name={playing ? "pause" : "play"} size={16} /></motion.button>
-        <div className="strip" ref={strip} role="radiogroup" aria-label="Scan hour: India median PM2.5">
+        <div className="strip" ref={strip} role="radiogroup" aria-label="Scan hour: India median PM2.5" onKeyDown={(e) => {
+          const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key] ?? (e.key === "Home" ? -index : e.key === "End" ? hours.length - 1 - index : 0);
+          if (!step) return;
+          e.preventDefault(); e.stopPropagation();
+          const next = Math.min(hours.length - 1, Math.max(0, index + step));
+          onIndex(next);
+          requestAnimationFrame(() => strip.current?.querySelector(`[data-k="${next}"]`)?.focus());
+        }}>
           {days.map((d) => (
             <div className="day" key={d.day}>
               <span className="day-label mono">{d.day}</span>
@@ -98,7 +105,7 @@ export default function Timeline({ step, onStep, hours, index, onIndex, playing,
                   const on = h.k === index;
                   const m = h.median_pm25;
                   return (
-                    <button key={h.key} type="button" role="radio" aria-checked={on} className={`col${on ? " on" : ""}`}
+                    <button key={h.key} type="button" role="radio" aria-checked={on} tabIndex={on ? 0 : -1} data-k={h.k} className={`col${on ? " on" : ""}`}
                       aria-label={`${d.day} ${clockLabel(h.hour_utc)} IST, India median ${m === undefined ? "unknown" : Math.round(m)} µg/m³`}
                       onClick={() => onIndex(h.k)}>
                       <span className="col-v mono">{m === undefined ? "–" : Math.round(m)}</span>

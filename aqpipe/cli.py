@@ -104,6 +104,28 @@ def cmd_build(a):
     print(f"{len(table):,} training rows, {table['station_id'].nunique()} stations -> {a.out}")
 
 
+def cmd_context(a):
+    from .context import station_context
+    from .ground import load_stations
+    from .mosdac import list_aod_files, parse_filename
+
+    files = list_aod_files(a.aod_dir)
+    if a.satellite:
+        files = [f for f in files if parse_filename(f)[1] == a.satellite.upper()]
+    stations = load_stations(a.stations)
+    table = pd.read_csv(a.table, parse_dates=["time_utc"])
+    hourly = pd.read_csv(a.aod_hourly, parse_dates=["time_utc"])
+    for df in (table, hourly):
+        df["station_id"] = df["station_id"].astype(str)
+    used = stations[stations["station_id"].isin(table["station_id"].unique())]
+    out = station_context(files, used, table, hourly, cache_dir=a.cache)
+    out.to_csv(a.out, index=False)
+    if _meta_path(a.table).exists():
+        _meta_path(a.out).write_text(_meta_path(a.table).read_text())
+    print(f"{len(out):,} rows; with aod_50km {out['aod_50km'].notna().mean():.0%}, aod_day {out['aod_day'].notna().mean():.0%}, "
+          f"aod_clim {out['aod_clim'].notna().mean():.0%} -> {a.out}")
+
+
 def cmd_baseline(a):
     from .features import build_baseline_table
     from .ground import label_by_centre, load_stations, load_truth_csv, qc_pm25
@@ -215,6 +237,16 @@ def main(argv=None):
     s.add_argument("--cache", default="data/cache")
     s.add_argument("--gamma", type=float, default=0.5, help="Hygroscopic growth exponent in f(RH)")
     s.set_defaults(fn=cmd_build)
+
+    s = sub.add_parser("context", help="Add satellite context features (50 km, daily, seasonal AOD) to a training table")
+    s.add_argument("--aod-dir", required=True)
+    s.add_argument("--stations", default="data/stations.csv")
+    s.add_argument("--table", default="data/train_table.csv")
+    s.add_argument("--aod-hourly", default="data/aod_hourly.csv")
+    s.add_argument("--out", default="data/train_table_context.csv")
+    s.add_argument("--satellite", help="3R or 3S")
+    s.add_argument("--cache", default="data/cache")
+    s.set_defaults(fn=cmd_context)
 
     s = sub.add_parser("train", help="Spatial-block CV + temporal hold-out, baselines, SHAP, final model")
     s.add_argument("--table", default="data/train_table.csv")

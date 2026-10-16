@@ -258,7 +258,7 @@ export default function App() {
           <motion.header className="topbar" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}>
             <div className="brand">
-              <Wordmark />
+              <Wordmark as="h1" />
               {demo ? <span className="badge warn-badge mono" title={demo}>DEMO DATA</span> : <span className="badge mono">INSAT-3DR · {hours.length} scans · Oct–Jan</span>}
             </div>
             <nav className="tools" aria-label="Tools">

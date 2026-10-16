@@ -38,6 +38,8 @@ FRIENDLY = {
     "aod": "Satellite AOD", "aod_nearest": "Satellite AOD", "aod_std": "AOD patchiness nearby",
     "aod_frac_valid": "Cloud-free share of pixels", "aod_over_blh": "AOD ÷ mixing height",
     "aod_corr": "AOD corrected for humidity & mixing height", "aod_minus_cams": "Satellite vs CAMS AOD gap",
+    "aod_50km": "Regional haze, 50 km", "aod_day": "Today's haze, all scans", "aod_clim": "Usual haze here (season)",
+    "aod_anom": "Today's haze vs usual",
     "boundary_layer_height": "Mixing height (BLH)", "blh_min_12h": "Mixing height, past 12 h",
     "relative_humidity_2m": "Humidity", "temperature_2m": "Temperature", "dew_point_2m": "Humidity",
     "surface_pressure": "Surface pressure", "cloud_cover": "Cloud cover", "u10": "Wind", "v10": "Wind",

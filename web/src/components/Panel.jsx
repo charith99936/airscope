@@ -36,7 +36,7 @@ function Reading({ label, value, category, children }) {
     <Section>
       <h2 className="label">{label}</h2>
       <p className="big"><span className="big-num"><CountUp value={value} /></span><span className="big-unit">µg/m³ PM2.5</span></p>
-      <p className="cat" style={{ color: rgb(pmRGB(value)) }}>{category}</p>
+      <p className="cat"><i style={{ background: rgb(pmRGB(value)) }} aria-hidden="true" />{category}</p>
       <div className="scale" aria-hidden="true">
         <div className="scale-bar" style={{ background: SCALE_GRADIENT }}>
           <motion.span className="scale-mark" initial={false} animate={{ left: `${scalePos(value)}%` }} transition={{ type: "spring", stiffness: 200, damping: 28 }} />

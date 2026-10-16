@@ -19,6 +19,7 @@ from matplotlib.colors import LinearSegmentedColormap, LogNorm  # noqa: E402
 from sklearn.linear_model import LinearRegression  # noqa: E402
 from sklearn.model_selection import GroupKFold  # noqa: E402
 
+from .context import CONTEXT_FEATURES  # noqa: E402
 from .features import (  # noqa: E402
     CAMS_FEATURES,
     LOC_FEATURES,
@@ -29,16 +30,20 @@ from .features import (  # noqa: E402
 )
 
 LGB_PARAMS = dict(
-    n_estimators=600,
+    n_estimators=900,
     learning_rate=0.03,
-    num_leaves=31,
-    min_child_samples=30,
+    num_leaves=127,
+    min_child_samples=80,
     subsample=0.8,
     subsample_freq=1,
     colsample_bytree=0.8,
     reg_lambda=1.0,
     verbose=-1,
 )
+
+# Physics guardrails: PM2.5 may only rise with CAMS PM2.5 and only fall as the mixing layer deepens, all else
+# equal. Constraining these two (not every plausible feature) scored best in spatial CV: see runs/ablation.json.
+MONOTONE = {"cams_pm25": 1, "boundary_layer_height": -1, "blh_min_12h": -1}
 
 NAMES = {
     "cams_raw": "CAMS PM2.5 as-is (no training)",
@@ -52,9 +57,10 @@ SURFACE, INK, INK_2, GRID, SERIES = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df", 
 SEQUENTIAL = LinearSegmentedColormap.from_list("blue", ["#cde2fb", "#86b6ef", "#2a78d6", "#184f95", "#0d366b"])
 
 
-def feature_sets(use_latlon: bool) -> dict[str, list[str]]:
+def feature_sets(use_latlon: bool, context: bool = False) -> dict[str, list[str]]:
     base = MET_FEATURES + CAMS_FEATURES + TIME_FEATURES + (LOC_FEATURES if use_latlon else [])
-    return {"lgbm_no_satellite": base, "lgbm_with_insat_aod": SAT_FEATURES + base}
+    sat = SAT_FEATURES + (CONTEXT_FEATURES if context else [])
+    return {"lgbm_no_satellite": base, "lgbm_with_insat_aod": sat + base}
 
 
 def score(y: np.ndarray, p: np.ndarray) -> dict:
@@ -79,9 +85,14 @@ def spatial_groups(df: pd.DataFrame, block_deg: float) -> np.ndarray:
     return (by + "_" + bx).to_numpy()
 
 
-def _fit(X: pd.DataFrame, y: np.ndarray) -> lgb.LGBMRegressor:
+def _lgbm(X: pd.DataFrame, y: np.ndarray) -> lgb.LGBMRegressor:
     # log1p target: PM2.5 is heavy-tailed and errors scale with concentration
-    return lgb.LGBMRegressor(**LGB_PARAMS).fit(X, np.log1p(y))
+    params = {**LGB_PARAMS, "monotone_constraints": [MONOTONE.get(f, 0) for f in X.columns], "monotone_constraints_method": "advanced"}
+    return lgb.LGBMRegressor(**params).fit(X, np.log1p(y))
+
+
+def _fit(X: pd.DataFrame, y: np.ndarray) -> lgb.LGBMRegressor:
+    return _lgbm(X, y)
 
 
 def _predict_all(df: pd.DataFrame, train_idx, test_idx, sets, oof: dict, contrib=None, primary: str = ""):
@@ -226,7 +237,8 @@ def run(
     df = df[df["pm25"].notna()].reset_index(drop=True)
     y = df["pm25"].to_numpy()
     satellite = bool(df["aod"].notna().any())
-    sets = feature_sets(use_latlon)
+    context = satellite and all(c in df for c in CONTEXT_FEATURES)
+    sets = feature_sets(use_latlon, context)
     if not satellite:
         sets = {"lgbm_no_satellite": sets["lgbm_no_satellite"]}
     primary = "lgbm_with_insat_aod" if satellite else "lgbm_no_satellite"
@@ -293,11 +305,12 @@ def run(
         "pm25_median": float(np.median(y)),
         "temporal_cutoff_utc": str(cutoff),
     }
+    summary["context_features"] = context
     metrics = {"summary": summary, "spatial_cv": spatial_rows, "temporal_holdout": temporal_rows,
                "aod_diagnostics": diag.to_dict("records"), "shap_importance": importance.to_dict()}
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
     (out_dir / "features.json").write_text(json.dumps(
-        {"feature_sets": sets, "lgb_params": LGB_PARAMS,
+        {"feature_sets": sets, "lgb_params": LGB_PARAMS, "monotone": {f: MONOTONE[f] for f in full_feats if f in MONOTONE},
          "preprocessing": {"radius_km": 15.0, "gamma": 0.5, **(preprocessing or {})}}, indent=2))
     pd.DataFrame({"station_id": df["station_id"], "time_utc": df["time_utc"], "pm25": y,
                   **{f"pred_{k_}": v for k_, v in preds.items()}}).to_csv(out_dir / "oof_predictions.csv", index=False)
@@ -330,6 +343,11 @@ def run(
         "# PM2.5 from INSAT AOD — training report" if satellite else "# No-satellite baseline — weather + CAMS",
         "",
         *(extra_notes or []),
+        "## Model",
+        f"- LightGBM on log1p(PM2.5), {LGB_PARAMS['n_estimators']} trees, learning rate {LGB_PARAMS['learning_rate']}",
+        f"- Monotone constraints (physics guardrails): " + ", ".join(f"{f} {'+' if v > 0 else '−'}" for f, v in MONOTONE.items() if f in full_feats),
+        *([f"- Satellite context features: {', '.join(CONTEXT_FEATURES)} (50 km, daily and seasonal AOD)"] if context else []),
+        "",
         "## Data",
         *data_lines,
         "",

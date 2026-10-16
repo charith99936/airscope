@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 
 const EASE = [0.16, 1, 0.3, 1];
 const ORBIT = "M-46 0a46 14 0 1 0 92 0a46 14 0 1 0 -92 0"; // the satellite's path, around the globe "o"
+const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** The "o" of airscope: a planet ring in a light gradient, with INSAT on a tilted orbit around it. */
 function GlobeO({ intro }) {
@@ -28,7 +29,7 @@ function GlobeO({ intro }) {
       <path className="wm-meridian" d="M0 -29a12 29 0 1 0 0 58a12 29 0 1 0 0 -58M-29 0h58" />
       <g transform="rotate(-18)">
         <path className="wm-orbit-front" d="M46 0a46 14 0 0 1 -92 0" />
-        {intro ? (
+        {intro && !REDUCED ? (
           <g className="wm-sat" opacity="0">
             <circle r="12" fill={`url(#${id}-sat)`} />
             <circle r="4.6" fill="#fff" />
