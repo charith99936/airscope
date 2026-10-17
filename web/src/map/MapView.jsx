@@ -46,7 +46,7 @@ const loadIndia = () => (indiaRings ||= fetch("/india.geojson").then((r) => r.js
  * The map: a quiet land silhouette, the selected layer as a soft colour field over India, stations on top.
  * Imperative handle: fitBounds, flyTo, easeTo, jumpTo, getView.
  */
-const MapView = forwardRef(function MapView({ grid, stations, cities, step, theme, pin, onPick, onHover, onMoveEnd }, ref) {
+const MapView = forwardRef(function MapView({ grid, stations, cities, step, theme, pin, onPick, onHover, onMoveEnd, onDrawn }, ref) {
   const container = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -57,12 +57,12 @@ const MapView = forwardRef(function MapView({ grid, stations, cities, step, them
   const [painted, setPainted] = useState(false); // stations wait for the first colour field, so they never float on an empty map
   const [zoom, setZoom] = useState(3.9);
   const latest = useRef({});
-  latest.current = { onPick, onHover, onMoveEnd, grid, step };
+  latest.current = { onPick, onHover, onMoveEnd, onDrawn, grid, step };
 
   useEffect(() => {
     canvases.current = [0, 1].map(() => Object.assign(document.createElement("canvas"), { width: 1, height: 1 }));
     const map = new MapLibreMap({
-      container: container.current, style: baseStyle(theme, canvases.current), center: [81, 22], zoom: 3.9,
+      container: container.current, style: baseStyle(theme, canvases.current), center: [80, 21], zoom: 3.2, // the reveal zooms in from here
       minZoom: 2.6, maxZoom: 10, maxPitch: 0, dragRotate: false, pitchWithRotate: false,
       maxBounds: [[10, -35], [150, 65]], attributionControl: { compact: true },
     });
@@ -97,6 +97,8 @@ const MapView = forwardRef(function MapView({ grid, stations, cities, step, them
     easeTo: (opts) => mapRef.current?.easeTo({ duration: REDUCED ? 0 : 700, ...opts }),
     jumpTo: (opts) => mapRef.current?.jumpTo(opts),
     getView: () => (mapRef.current ? view(mapRef.current) : null),
+    cameraFor: (b, opts) => mapRef.current?.cameraForBounds(b, opts),
+    project: (lngLat) => mapRef.current?.project(lngLat),
   }), []);
 
   // Theme: repaint the basemap
@@ -128,10 +130,19 @@ const MapView = forwardRef(function MapView({ grid, stations, cities, step, them
       src.setCoordinates(coordinates);
       src.play();                                    // a static canvas source re-uploads only while "playing"
       map.once("render", () => src.pause());
+      const first = !painted;
+      if (first) map.setPaintProperty(FIELD[back], "raster-opacity-transition", { duration: 0 }); // fully there when the splash lifts
       map.setPaintProperty(FIELD[back], "raster-opacity", theme === "dark" ? 0.82 : 0.88);
       map.setPaintProperty(FIELD[front.current], "raster-opacity", 0);
       front.current = back;
-      setPainted(true);
+      if (first) {
+        map.once("idle", () => {                     // basemap, outline and field are all on screen
+          map.setPaintProperty(FIELD[back], "raster-opacity-transition", { duration: REDUCED ? 0 : 650 });
+          setPainted(true);
+          latest.current.onDrawn?.();
+        });
+        map.triggerRepaint();
+      }
     });
     return () => { alive = false; };
   }, [grid, step, theme, ready]);

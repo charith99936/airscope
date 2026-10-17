@@ -17,7 +17,10 @@ const BOOT_STEPS = [
   { label: "Connecting to INSAT-3DR", detail: "", status: "active" },
   { label: "Reading the satellite grid", detail: "", status: "pending" },
   { label: "Placing ground stations", detail: "", status: "pending" },
+  { label: "Drawing the map", detail: "", status: "pending" },
 ];
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const MAP_TIMEOUT_MS = 10000; // if WebGL never reports in, reveal anyway rather than hang on the splash
 
 function useWidth() {
   const [width, setWidth] = useState(window.innerWidth);
@@ -30,12 +33,15 @@ function useWidth() {
 }
 
 // Space the map leaves for the panel (left) and the timeline (bottom)
+// (before the chrome exists, e.g. under the splash, it falls back to the layout tokens)
 function viewPadding() {
   const tl = document.querySelector(".timeline")?.getBoundingClientRect();
   const panel = document.querySelector(".panel")?.getBoundingClientRect();
-  if (window.innerWidth < 768) return { top: (tl ? tl.bottom : 240) + 12, bottom: 184, left: 16, right: 16 };
-  const bottom = tl ? window.innerHeight - tl.top + 12 : 200;
-  return { top: 80, bottom, left: panel ? panel.right + 24 : 400, right: 48 };
+  const css = getComputedStyle(document.documentElement);
+  const gap = parseFloat(css.getPropertyValue("--gap")) || 16, panelW = parseFloat(css.getPropertyValue("--panel-w")) || 340;
+  if (window.innerWidth < 768) return { top: (tl ? tl.bottom : gap + 54 + 172) + 12, bottom: 184, left: 16, right: 16 };
+  const bottom = tl ? window.innerHeight - tl.top + 12 : gap + 186;
+  return { top: 80, bottom, left: panel ? panel.right + 24 : gap + panelW + 24, right: 48 };
 }
 
 function HoverTip({ hover, step }) {
@@ -73,10 +79,13 @@ export default function App() {
   const [tableOpen, setTableOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [booting, setBooting] = useState(true);
+  const [revealed, setRevealed] = useState(false); // the UI arrives once the globe has landed on the map
   const [steps, setSteps] = useState(BOOT_STEPS);
   const cache = useRef(new Map());
   const mapRef = useRef(null);
   const sheetAt = useRef(null);
+  const mapDrawn = useRef(null); // resolves when the map has painted its first colour field
+  const globeTarget = useRef(null); // where India sits on the framed map: the splash globe dives onto it
   const step = stepById(stepId);
   const places = useMemo(() => buildPlaces(current?.stations || []), [current]);
   const progress = steps.filter((s) => s.status === "done").length / steps.length;
@@ -105,12 +114,29 @@ export default function App() {
         done(1, `${entry.stats.n.toLocaleString()} cells`);
         done(2, `${entry.stations.filter((s) => s.observed !== null).length} reporting`);
         cache.current.set(h.hours[start].key, entry);
-        await new Promise((r) => setTimeout(r, Math.max(0, MIN_SPLASH_MS - (performance.now() - t0))));
-        if (!alive || HOLD_SPLASH) return;
+        // hand the data to the map now, under the splash, and lift the splash only once the map has drawn it
+        const drawn = new Promise((r) => { mapDrawn.current = r; });
         setHours(h.hours);
         setSkill((h.skill || []).find((r) => r.subset === "INSAT AOD available" && r.model === FULL_MODEL && r.r2 !== undefined) || null);
         setIndex(start);
         setCurrent(entry);
+        await Promise.race([drawn, new Promise((r) => setTimeout(r, MAP_TIMEOUT_MS))]);
+        done(3, "");
+        await new Promise((r) => setTimeout(r, Math.max(250, MIN_SPLASH_MS - (performance.now() - t0))));
+        if (!alive || HOLD_SPLASH) return;
+        // frame the map under the splash, then tell the globe where India is so it lands exactly there
+        const map = mapRef.current;
+        if (map && hash.map) {
+          const [lat, lng, zoom] = hash.map;
+          map.jumpTo({ center: [lng, lat], zoom });
+        } else if (map) {
+          const cam = map.cameraFor(INDIA, { padding: viewPadding() });
+          if (cam) {
+            map.jumpTo(cam);
+            const c = map.project([79, 22]), w = map.project([93.5, 22]).x - map.project([64.5, 22]).x;
+            globeTarget.current = { x: c.x, y: c.y, w };
+          }
+        }
         setBooting(false);
       } catch (err) {
         if (!alive) return;
@@ -121,19 +147,19 @@ export default function App() {
     return () => { alive = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ---- after the splash: fly in to India (or restore a shared view)
+  // ---- after the splash: let the globe land (1 s), then bring in the UI and fit the map to its real size
   useEffect(() => {
-    if (booting) return;
+    if (booting) return undefined;
+    const t = window.setTimeout(() => setRevealed(true), REDUCED_MOTION ? 0 : 1000);
+    return () => window.clearTimeout(t);
+  }, [booting]);
+  useEffect(() => {
+    if (!revealed) return;
     requestAnimationFrame(() => {
-      if (hash.map) {
-        const [lat, lng, zoom] = hash.map;
-        mapRef.current?.jumpTo({ center: [lng, lat], zoom });
-      } else {
-        mapRef.current?.fitBounds(INDIA, { padding: viewPadding(), duration: 2200 });
-      }
+      if (!hash.map) mapRef.current?.fitBounds(INDIA, { padding: viewPadding(), duration: 700, easing: (k) => 1 - (1 - k) ** 3 });
       if (hash.at) inspect({ lat: hash.at[0], lng: hash.at[1] });
     });
-  }, [booting]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- hours: load the current one, prefetch neighbours, keep the previous hour for "since" labels
   useEffect(() => {
@@ -233,7 +259,7 @@ export default function App() {
           e.preventDefault(); setPlaying(false); k.goTo(k.index + (e.key === "ArrowRight" ? 1 : -1)); break;
         case " ": if (inMap || onControl) return; e.preventDefault(); setPlaying((p) => !p); break;
         case "t": case "T": setTheme((x) => (x === "dark" ? "light" : "dark")); break;
-        default: if (/^[1-4]$/.test(e.key)) setStepId(STEPS[Number(e.key) - 1].id);
+        default: if (/^[1-9]$/.test(e.key) && STEPS[Number(e.key) - 1]) setStepId(STEPS[Number(e.key) - 1].id);
       }
     };
     document.addEventListener("keydown", onKey);
@@ -249,11 +275,12 @@ export default function App() {
     <>
       <a className="skip-link" href="#layers">Skip to map controls</a>
       <MapPane ref={mapRef} grid={current?.grid || null} stations={current?.stations || []} cities={places.cities}
-        step={step} theme={theme} pin={sheet?.at || null} onPick={inspect} onHover={phone ? undefined : setHover} onMoveEnd={syncHash} />
+        step={step} theme={theme} pin={sheet?.at || null} onPick={inspect} onHover={phone ? undefined : setHover} onMoveEnd={syncHash}
+        onDrawn={() => mapDrawn.current?.()} />
 
-      <AnimatePresence>{booting && <Loader key="loader" steps={steps} progress={progress} />}</AnimatePresence>
+      <AnimatePresence>{booting && <Loader key="loader" steps={steps} progress={progress} target={globeTarget} />}</AnimatePresence>
 
-      {!booting && current && hour && (
+      {revealed && current && hour && (
         <>
           <motion.header className="topbar" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}>

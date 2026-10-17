@@ -5,7 +5,7 @@ import { Wordmark } from "./Logo.jsx";
 
 const EASE = [0.16, 1, 0.3, 1];
 /** Splash: the globe, the wordmark beneath it, and one status line under a hairline. */
-export default function Loader({ steps, progress }) {
+export default function Loader({ steps, progress, target }) {
   const slot = useRef(null);
   const present = useIsPresent();
   const spring = useSpring(0, { stiffness: 70, damping: 22 });
@@ -17,8 +17,8 @@ export default function Loader({ steps, progress }) {
 
   return (
     <motion.div className="loader" role="status" aria-live="polite" aria-label="Loading Airscope"
-      exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: [0.7, 0, 0.84, 0] }}>
-      <GlobeScene slot={slot} leaving={!present} />
+      exit={{ opacity: 0 }} transition={{ duration: 1.15, ease: [0.7, 0, 0.84, 0] }}>{/* clears as the globe lands (1 s) */}
+      <GlobeScene slot={slot} leaving={!present} target={target} />
 
       <motion.div className="loader-stage" exit={{ opacity: 0, y: -12, transition: { duration: 0.35, ease: EASE } }}>
         <div className="globe-slot" ref={slot} aria-hidden="true" />

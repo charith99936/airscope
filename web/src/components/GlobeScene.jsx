@@ -16,9 +16,14 @@ const toXYZ = (lat, lon, r = 1) => {
   return new THREE.Vector3(r * Math.cos(p) * Math.sin(l), r * Math.sin(p), r * Math.cos(p) * Math.cos(l));
 };
 const easeOut = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+const easeInOut = (x) => { const k = Math.min(1, Math.max(0, x)); return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; };
+const DIVE = 1.0;                // seconds for the globe to land on the map's India
+const FOV = 30, FOV_LANDED = 5;  // the dive narrows the lens (a dolly zoom) so the landed globe is near-flat, like the map
 
 // One clock-and-fade uniform pair shared by every material, so the whole planet fades in together
-const shared = { uTime: { value: 0 }, uFade: { value: 0 }, uSun: { value: SUN } };
+// uDive: 0 at rest, 1 when the globe has landed on the map; it clears everything but India's dots
+const MAP_SEA = "#04060b";       // the map's background (THEME.dark.bg): the landed globe's ocean becomes exactly this
+const shared = { uTime: { value: 0 }, uFade: { value: 0 }, uSun: { value: SUN }, uDive: { value: 0 }, uBg: { value: new THREE.Color(MAP_SEA) } };
 
 const oceanMat = new THREE.ShaderMaterial({
   uniforms: shared,
@@ -29,16 +34,18 @@ const oceanMat = new THREE.ShaderMaterial({
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }`,
   fragmentShader: /* glsl */`
+    uniform float uDive; uniform vec3 uBg;
     uniform vec3 uSun; uniform float uFade;
     varying vec3 vN;
     void main() {
       float l = max(dot(vN, uSun), 0.0);
       vec3 col = mix(vec3(0.0015, 0.003, 0.009), vec3(0.006, 0.018, 0.055), smoothstep(0.0, 1.0, l));
       float rim = pow(1.0 - max(vN.z, 0.0), 3.0);                       // the camera looks down -z
-      col += vec3(0.10, 0.26, 0.85) * rim * (0.12 + 0.88 * l) * 0.55;
+      col += vec3(0.10, 0.26, 0.85) * rim * (0.12 + 0.88 * l) * 0.55 * (1.0 - uDive);
       vec3 h = normalize(uSun + vec3(0.0, 0.0, 1.0));
-      col += vec3(0.45, 0.62, 1.0) * pow(max(dot(vN, h), 0.0), 80.0) * 0.22;   // sun glint on the sea
-      gl_FragColor = vec4(col * uFade, 1.0);
+      col += vec3(0.45, 0.62, 1.0) * pow(max(dot(vN, h), 0.0), 80.0) * 0.22 * (1.0 - uDive);   // sun glint on the sea
+      col = mix(col * uFade, uBg, uDive);                                // landed: no disc left, just the map's sea
+      gl_FragColor = vec4(col, 1.0);
     }`,
 });
 
@@ -80,12 +87,13 @@ const atmosMat = new THREE.ShaderMaterial({
     varying vec3 vN;
     void main() { vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
+    uniform float uDive;
     uniform vec3 uSun; uniform float uFade;
     varying vec3 vN;
     void main() {
       float i = pow(clamp(-vN.z, 0.0, 1.0), 2.2);
       float lit = 0.35 + 0.65 * max(dot(normalize(vN.xy + 1e-4), normalize(uSun.xy)), 0.0);   // brighter on the sunlit limb
-      gl_FragColor = vec4(vec3(0.12, 0.32, 1.0) * i * 0.9 * lit * uFade, 1.0);
+      gl_FragColor = vec4(vec3(0.12, 0.32, 1.0) * i * 0.9 * lit * uFade * (1.0 - uDive), 1.0);
     }`,
 });
 
@@ -95,13 +103,14 @@ const beamMat = new THREE.ShaderMaterial({
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
+    uniform float uDive;
     uniform float uTime; uniform float uFade;
     varying vec2 vUv;
     void main() {
       float along = vUv.y;                                               // 1 at the satellite, 0 at India
       float pulse = 0.55 + 0.45 * sin(uTime * 4.0 + along * 14.0);
       float a = pow(along, 0.9) * 0.16 * pulse + smoothstep(0.06, 0.0, along) * 0.18;
-      gl_FragColor = vec4(vec3(0.45, 0.72, 1.4) * a * uFade, 1.0);
+      gl_FragColor = vec4(vec3(0.45, 0.72, 1.4) * a * uFade * (1.0 - smoothstep(0.0, 0.35, uDive)), 1.0);
     }`,
 });
 
@@ -111,6 +120,7 @@ const pingMat = new THREE.ShaderMaterial({
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
+    uniform float uDive;
     uniform float uTime; uniform float uFade;
     varying vec2 vUv;
     void main() {
@@ -120,7 +130,7 @@ const pingMat = new THREE.ShaderMaterial({
         float f = fract(uTime * 0.55 + float(k) * 0.5);
         a += smoothstep(0.06, 0.0, abs(r - f)) * (1.0 - f);
       }
-      gl_FragColor = vec4(vec3(0.35, 0.6, 1.3) * a * 0.7 * uFade, 1.0);
+      gl_FragColor = vec4(vec3(0.35, 0.6, 1.3) * a * 0.7 * uFade * (1.0 - smoothstep(0.0, 0.35, uDive)), 1.0);
     }`,
 });
 
@@ -144,13 +154,14 @@ const satMat = new THREE.ShaderMaterial({
     uniform float uPixelRatio;
     void main() { gl_PointSize = 34.0 * uPixelRatio; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
+    uniform float uDive;
     uniform float uFade;
     void main() {
       vec2 c = gl_PointCoord - 0.5; float d = length(c);
       float core = smoothstep(0.09, 0.0, d);
       float halo = smoothstep(0.5, 0.0, d) * 0.35;
       float flare = (smoothstep(0.015, 0.0, abs(c.x)) + smoothstep(0.015, 0.0, abs(c.y))) * smoothstep(0.5, 0.0, d) * 0.6;
-      gl_FragColor = vec4(vec3(0.75, 0.88, 1.6) * (core * 2.5 + halo + flare) * uFade, 1.0);
+      gl_FragColor = vec4(vec3(0.75, 0.88, 1.6) * (core * 2.5 + halo + flare) * uFade * (1.0 - smoothstep(0.0, 0.35, uDive)), 1.0);
     }`,
 });
 
@@ -220,9 +231,10 @@ function stars() {
   return new THREE.Points(g, starMat);
 }
 
-function Earth({ slot, leaving }) {
+function Earth({ slot, leaving, target, vignette }) {
   const { size, camera, gl } = useThree();
-  const place = useRef(null), spin = useRef(null), sky = useRef(null);
+  const place = useRef(null), tilt = useRef(null), spin = useRef(null), sky = useRef(null);
+  const restCentre = useRef(null);  // India's screen position when the dive starts
   const dots = useLandDots();
   const leaveAt = useRef(null);
   const objects = useMemo(() => {
@@ -246,25 +258,64 @@ function Earth({ slot, leaving }) {
     const intro = REDUCED ? 1 : easeOut(t / 1.8);
     shared.uFade.value = intro;
 
-    // Fit the globe (radius 1) to the layout's .globe-slot: camera fixed on +z, the planet moves
+    // Spin eastward and settle with India facing us; when the splash leaves, dive onto the map's India
+    if (leaving && leaveAt.current === null) leaveAt.current = t;
+    const tgt = target?.current;
+    const out = leaveAt.current === null ? 0 : (tgt ? easeInOut : easeOut)((t - leaveAt.current) / DIVE);
+    shared.uDive.value = out;
+    if (vignette.current) vignette.current.darkness = 0.75 * (1 - out);   // the map has no vignette
+    objects.grid.material.opacity = 0.07 * (1 - out);
+    objects.orbit.material.opacity = 0.4 * (1 - Math.min(1, out / 0.35));
+    const lonAt = (x) => INDIA.lon + (REDUCED ? 0 : 150 * Math.exp(-x / 1.15) - 2.2 * x);
+    const lon = leaveAt.current === null ? lonAt(t) : lonAt(leaveAt.current) + (INDIA.lon - lonAt(leaveAt.current)) * (tgt ? out : 0);
+    spin.current.rotation.y = -lon * DEG;
+    tilt.current.rotation.x = tgt ? TILT + (INDIA.lat * DEG - TILT) * out : TILT;   // face India square-on, as the map does
+
+    // Fit the globe (radius 1) to the layout's .globe-slot: camera on +z, the planet moves
     const b = slot.current?.getBoundingClientRect();
     const W = size.width, H = size.height;
     const rPx = b ? b.width / 2 : Math.min(W, H) * 0.26;
     const cx = b ? b.left + b.width / 2 : W / 2, cy = b ? b.top + b.height / 2 : H * 0.42;
     const halfH = H / (2 * rPx);                                          // world half-height when the globe spans rPx
+    camera.fov = tgt ? FOV + (FOV_LANDED - FOV) * out : FOV;
     const dist = halfH / Math.tan((camera.fov * DEG) / 2);
     camera.position.set(0, 0, dist);
     camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
     const unit = (2 * halfH) / H;
+    const rest = (0.84 + 0.16 * intro);
     place.current.position.set((cx - W / 2) * unit, (H / 2 - cy) * unit, 0);
+    place.current.scale.setScalar(rest);
 
-    // Spin eastward and settle with India facing us; dive toward it when the splash leaves
-    if (leaving && leaveAt.current === null) leaveAt.current = t;
-    const out = leaveAt.current === null ? 0 : easeOut((t - leaveAt.current) / 0.9);
-    const s = (0.84 + 0.16 * intro) * (1 + 1.4 * out * out);
-    place.current.scale.setScalar(s);
-    const lon = INDIA.lon + (REDUCED ? 0 : 150 * Math.exp(-t / 1.15) - 2.2 * t);
-    spin.current.rotation.y = -lon * DEG;
+    if (!tgt || leaveAt.current === null) {
+      if (leaveAt.current !== null) place.current.scale.setScalar(rest * (1 + 1.4 * out * out));  // no map target: plain dive
+    } else {
+      // where a lat/lon on the globe lands on screen, in CSS px
+      const v = new THREE.Vector3();
+      const screen = (lat, lo) => {
+        place.current.updateMatrixWorld(true);
+        v.copy(toXYZ(lat, lo, 1)).applyMatrix4(spin.current.matrixWorld);
+        const z = v.z;
+        v.project(camera);
+        return { x: (v.x + 1) * W / 2, y: (1 - v.y) * H / 2, z };
+      };
+      const width = () => Math.abs(screen(INDIA.lat, INDIA.lon + 14.5).x - screen(INDIA.lat, INDIA.lon - 14.5).x);
+      if (!restCentre.current) restCentre.current = screen(INDIA.lat, INDIA.lon);
+      // scale: India's width grows geometrically from its rest width to the map's
+      const w0 = width();
+      let sT = rest * tgt.w / w0;
+      place.current.scale.setScalar(sT);
+      sT *= tgt.w / width();                                              // second pass absorbs perspective
+      place.current.scale.setScalar(rest * Math.pow(sT / rest, out));
+      // position: slide so India's centre follows a straight screen path from where it was to the map's
+      const want = { x: restCentre.current.x + (tgt.x - restCentre.current.x) * out, y: restCentre.current.y + (tgt.y - restCentre.current.y) * out };
+      for (let k = 0; k < 2; k++) {
+        const c = screen(INDIA.lat, INDIA.lon);
+        const per = unit * (dist - c.z) / dist;                           // world units per px at India's depth
+        place.current.position.x += (want.x - c.x) * per;
+        place.current.position.y -= (want.y - c.y) * per;
+      }
+    }
     sky.current.rotation.y += delta * 0.006;
   });
 
@@ -272,7 +323,7 @@ function Earth({ slot, leaving }) {
     <>
       <primitive ref={sky} object={objects.stars} />
       <group ref={place}>
-        <group rotation={[TILT, 0, 0]}>
+        <group ref={tilt} rotation={[TILT, 0, 0]}>
           <group ref={spin}>
             <mesh material={oceanMat}><sphereGeometry args={[1, 128, 128]} /></mesh>
             <primitive object={objects.grid} />
@@ -296,16 +347,17 @@ class Fallback extends Component {
 }
 
 /** Full-screen WebGL globe sized and placed by the `slot` element; bloom makes India and INSAT glow. */
-export default function GlobeScene({ slot, leaving }) {
+export default function GlobeScene({ slot, leaving, target }) {
+  const vignette = useRef(null);
   return (
     <Fallback>
-      <Canvas className="globe-canvas" style={{ position: "absolute", inset: 0 }} dpr={[1, 2]} camera={{ fov: 30, near: 0.1, far: 200, position: [0, 0, 8] }}
+      <Canvas className="globe-canvas" style={{ position: "absolute", inset: 0 }} dpr={[1, 2]} camera={{ fov: FOV, near: 0.1, far: 2000, position: [0, 0, 8] }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }} aria-hidden="true">
-        <color attach="background" args={["#04060b"]} />
-        <Earth slot={slot} leaving={leaving} />
+        <color attach="background" args={[MAP_SEA]} />
+        <Earth slot={slot} leaving={leaving} target={target} vignette={vignette} />
         <EffectComposer multisampling={0}>
           <Bloom mipmapBlur luminanceThreshold={0.55} luminanceSmoothing={0.2} intensity={0.95} radius={0.7} />
-          <Vignette offset={0.28} darkness={0.75} />
+          <Vignette ref={vignette} offset={0.28} darkness={0.75} />
           <Noise opacity={0.028} />
         </EffectComposer>
       </Canvas>
